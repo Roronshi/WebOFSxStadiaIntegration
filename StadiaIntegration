@@ -1,0 +1,85 @@
+// ==UserScript==
+// @name         WebOFS Stadia Decile Mapper (1-2-…-0-])
+// @namespace    https://openfunscripter.github.io/
+// @version      5.0
+// @description  Stadia left-stick → decile keys only
+// @match        https://openfunscripter.github.io/WebOFS/*
+// @grant        none
+// ==/UserScript==
+
+(() => {
+  /* ───── settings ───── */
+  const POLL_HZ= 30;
+  const AXIS_Y= 1;
+  const BTN_MENU= 9;
+  const DEADZONE= 0.07;
+  const INVERT_Y= true;
+  /* ──────────────────── */
+
+  /* decile key table 0-10 */
+  const KEYS = [
+    {key:'1', code:'Digit1', keyCode:49},
+    {key:'2', code:'Digit2', keyCode:50},
+    {key:'3', code:'Digit3', keyCode:51},
+    {key:'4', code:'Digit4', keyCode:52},
+    {key:'5', code:'Digit5', keyCode:53},
+    {key:'6', code:'Digit6', keyCode:54},
+    {key:'7', code:'Digit7', keyCode:55},
+    {key:'8', code:'Digit8', keyCode:56},
+    {key:'9', code:'Digit9', keyCode:57},
+    {key:'0', code:'Digit0', keyCode:48},
+    {key:']', code:'BracketRight', keyCode:221} // 100 %
+  ];
+  const KEY_SPACE = {key:' ', code:'Space', keyCode:32};
+
+  /* helper: fire synthetic key */
+  const fire = k => {
+    const e = {...k, which:k.keyCode, bubbles:true};
+    document.dispatchEvent(new KeyboardEvent('keydown', e));
+    document.dispatchEvent(new KeyboardEvent('keyup', e));
+  };
+
+  /* overlay */
+  const ui = Object.assign(document.createElement('div'), {
+    style:'position:fixed;top:8px;right:8px;padding:6px 10px;' +
+          'background:#222;color:#fff;font:14px sans-serif;border-radius:6px;z-index:9999',
+    textContent:'Decile mapper ready'
+  });
+  document.body.appendChild(ui);
+
+  /* state */
+  let recording = false;
+  let prevMenu = false;
+  let lastDecile = -1;
+
+  /* main loop */
+  setInterval(() => {
+    const gp = navigator.getGamepads()[0];
+    if (!gp) return;
+
+    /* toggle record with Menu */
+    const menu = gp.buttons[BTN_MENU]?.pressed;
+    if (menu && !prevMenu) {
+      fire(KEY_SPACE);
+      recording = !recording;
+      ui.textContent = recording ? 'Recording…' : 'Paused';
+      lastDecile = -1;
+    }
+    prevMenu = menu;
+    if (!recording) return;
+
+    /* stick value */
+    const raw = gp.axes[AXIS_Y];
+    if (Math.abs(raw) < DEADZONE) return;
+
+    const axis = INVERT_Y ? -raw : raw;
+    const pct = (axis + 1) * 50;
+    const dec = Math.max(0, Math.min(10, Math.round(pct / 10)));
+
+    if (dec !== lastDecile) {
+      fire(KEYS[dec]);
+      ui.textContent = `raw ${pct.toFixed(1)} %  → decile ${dec}`;
+      lastDecile = dec;
+    }
+  }, 1000 / POLL_HZ);
+})();
